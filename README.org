@@ -1,0 +1,71 @@
+* An external NVIDIA package repository for Nix/NixOS
+
+[[https://develop.spacemacs.org][file:https://cdn.rawgit.com/syl20bnr/spacemacs/442d025779da2f62fc86c2082703697714db6514/assets/spacemacs-badge.svg]]
+
+** Acknowledgements
+
+The source in this repository is derived from the [[https://github.com/NixOS/nixpkgs/tree/8e3eab28d876d770f7103c26f3d995588202862c/pkgs/os-specific/linux/nvidia-x11][upstream NVIDIA driver
+packaging work]] found in [[https://github.com/NixOS/nixpkgs][NixOS/nixpkgs]]. As such, this repository is also
+licensed under the MIT License.
+
+** Purpose
+
+The nixpkgs packaging for the NVIDIA drivers tends to be conservative in terms
+of picking up the latest versions NVIDIA [[https://www.nvidia.com/en-us/drivers/unix/][posts]]. This packaging is designed such
+that it can be consumed by anyone, but the main reason I am making this is for
+my own need to test the latest NVIDIA driver releases. The other purpose was to
+derive all components of the driver install from the runfile, without depending
+on [[github.com/NVIDIA]] repositories. From NixOS's perspective, using the GitHub
+repositories is a better choice, but I personally need components such as NVIDIA
+Settings to come from the runfile.
+
+** Usage
+
+The usage of this work is quite simple thanks to the fact that it's designed to
+be compatible with [[https://github.com/NixOS/nixpkgs/blob/8e3eab28d876d770f7103c26f3d995588202862c/nixos/modules/hardware/video/nvidia.nix][nixos/modules/hardware/video/nvidia.nix]].
+
+In ~/etc/nixos/configuration.nix~:
+
+#+BEGIN_SRC nix
+  { config, lib, pkgs, ... }:
+
+  with lib;
+
+  let
+    kernelPackages = pkgs.linuxPackages; # Or preferred linux kernel package
+
+    nvidiaPkgs = import (builtins.fetchTarball https://github.com/Binary-Eater/nixpkgs-nvidia/archive/trunk.tar.gz) {
+      lib = lib;
+      callPackage = pkgs.callPackage;
+      stdenv = stdenv;
+      pkgsi686Linux = pkgsi686Linux;
+      kernel = kernelPackages.kernel;
+    };
+  in
+  {
+    # ...
+    boot.kernelPackages = kernelPackages;
+
+    hardware.nvidia = {
+      package = nvidiaPkgs.beta; # or nvidiaPkgs.new_features if "New Feature Branch" is preferred
+      nvidiaSettings = false; # NVIDIA Settings has to be disabled since this
+                              # repository does not provide it and upstream
+                              # nvidia.nix module does not safely handle when the
+                              # package definition is null
+      open = true; # Both open and closed modules are supported
+      
+      # Other options here... Refer to search.nixos.org
+    };
+    # ...
+  }
+#+END_SRC
+
+** Design Choices
+
+I plan to blog about why I make certain design changes in the packaging work
+compared to what is done in the nixpkgs repository and go over some of the
+flexible ways to utilize this work. Till then, the biggest thing to note is that
+this repository treats NVIDIA runfiles as the only provider for GPU software
+components. The implementation is done in a way that packages created in this
+repository can directly satisfy the ~hardware.nvidia.package~ Nix option, making
+utilizing the work trivial.
