@@ -24,6 +24,7 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            download-buffer-size = 536870912
 
       - name: Scrape NVIDIA Unix drivers page and rewrite default.nix
         id: update
