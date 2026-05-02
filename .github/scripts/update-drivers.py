@@ -97,11 +97,11 @@ def prefetch_sri(url: str) -> str:
 
 def runfile_urls(version: str) -> tuple[str, str]:
     x86 = (
-        f"https://us.download.nvidia.com/XFree86/Linux-x86_64/"
+        f"https://download.nvidia.com/XFree86/Linux-x86_64/"
         f"{version}/NVIDIA-Linux-x86_64-{version}.run"
     )
     aarch = (
-        f"https://us.download.nvidia.com/XFree86/Linux-aarch64/"
+        f"https://download.nvidia.com/XFree86/Linux-aarch64/"
         f"{version}/NVIDIA-Linux-aarch64-{version}.run"
     )
     return x86, aarch
