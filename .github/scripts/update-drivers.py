@@ -127,6 +127,17 @@ def current_version(text: str, branch: str) -> str | None:
     return vm.group(1) if vm else None
 
 
+def current_shas(text: str, branch: str) -> tuple[str | None, str | None]:
+    m = block_pattern(branch).search(text)
+    if not m:
+        return None, None
+    body = m.group("body")
+    sha_64 = re.search(r'sha256_64bit\s*=\s*"([^"]+)"', body)
+    sha_aarch = re.search(r'sha256_aarch64\s*=\s*"([^"]+)"', body)
+    return (sha_64.group(1) if sha_64 else None,
+            sha_aarch.group(1) if sha_aarch else None)
+
+
 def update_branch(text: str, branch: str, version: str, sha_64: str, sha_aarch: str) -> str:
     def repl_body(body: str) -> str:
         body = re.sub(r'(version\s*=\s*")[^"]*(")', rf'\g<1>{version}\g<2>', body)
@@ -161,19 +172,34 @@ def main() -> None:
     text = DEFAULT_NIX.read_text()
     updated: dict[str, str] = {}
 
-    for branch, new_version in target.items():
-        cur = current_version(text, branch)
-        if cur is None:
+    # We always prefetch the runfiles for the version NVIDIA reports,
+    # even when default.nix already names that version. This catches
+    # hash drift — e.g. NVIDIA re-publishing the same version under a
+    # different artifact, or default.nix being hand-edited with a
+    # mismatched hash. Cost: ~6 runfile downloads per run regardless.
+    for branch, target_version in target.items():
+        cur_version = current_version(text, branch)
+        if cur_version is None:
             sys.exit(f"error: branch '{branch}' missing from default.nix")
-        if cur == new_version:
-            print(f"{branch}: already at {cur}", file=sys.stderr)
+        cur_sha_64, cur_sha_aarch = current_shas(text, branch)
+
+        x86_url, aarch_url = runfile_urls(target_version)
+        new_sha_64 = prefetch_sri(x86_url)
+        new_sha_aarch = prefetch_sri(aarch_url)
+
+        if (cur_version, cur_sha_64, cur_sha_aarch) == (
+            target_version, new_sha_64, new_sha_aarch
+        ):
+            print(f"{branch}: already at {cur_version} with matching hashes", file=sys.stderr)
             continue
-        print(f"{branch}: {cur} -> {new_version}", file=sys.stderr)
-        x86_url, aarch_url = runfile_urls(new_version)
-        sha_64 = prefetch_sri(x86_url)
-        sha_aarch = prefetch_sri(aarch_url)
-        text = update_branch(text, branch, new_version, sha_64, sha_aarch)
-        updated[branch] = new_version
+
+        if cur_version != target_version:
+            print(f"{branch}: {cur_version} -> {target_version}", file=sys.stderr)
+        else:
+            print(f"{branch}: hash drift at {cur_version}, refreshing", file=sys.stderr)
+
+        text = update_branch(text, branch, target_version, new_sha_64, new_sha_aarch)
+        updated[branch] = target_version
 
     if updated:
         DEFAULT_NIX.write_text(text)
