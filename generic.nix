@@ -1,6 +1,7 @@
 {
   version,
   kernel ? null,
+  kernelModuleMakeFlags ? null,
   url ? null,
   sha256_32bit ? null,
   sha256_64bit,
@@ -155,7 +156,7 @@ let
     kernelVersion = if libsOnly then null else kernel.modDirVersion;
 
     makeFlags = optionals (!libsOnly) (
-      kernel.makeFlags
+      kernelModuleMakeFlags
       ++ [
         "IGNORE_PREEMPT_RT_PRESENCE=1"
         "SYSSRC=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source"
@@ -194,7 +195,7 @@ let
 
     passthru = {
       open = callPackage ./open.nix {
-        inherit kernel;
+        inherit kernel kernelModuleMakeFlags;
         nvidia_x11 = self;
         broken = brokenOpen;
       };
