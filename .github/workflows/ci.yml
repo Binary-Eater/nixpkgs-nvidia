@@ -42,15 +42,39 @@ jobs:
             }
           '
 
-      - name: Build production, new_feature, and beta against linuxPackages.kernel
+      - name: Build open kernel module for each branch against linuxPackages.kernel
         env:
           NIXPKGS_ALLOW_UNFREE: '1'
         run: |
-          # latest and bleeding_edge are aliases of one of these three
-          # concrete branches, so building them would be redundant; the
-          # eval step above already verifies they resolve.
+          # latest and bleeding_edge are aliases of one of the three
+          # concrete branches; the eval step already verifies they
+          # resolve, so building them here would be redundant.
           for branch in production new_feature beta; do
-            echo "::group::Build $branch"
+            echo "::group::Build $branch.open"
+            nix-build --no-out-link -E "
+              let
+                pkgs = import <nixpkgs> {
+                  config.allowUnfree = true;
+                  config.nvidia.acceptLicense = true;
+                };
+                drivers = pkgs.callPackage ./. {
+                  kernel = pkgs.linuxPackages.kernel;
+                };
+              in drivers.$branch.open
+            "
+            echo "::endgroup::"
+          done
+
+      - name: Build closed driver for each branch against linuxPackages.kernel
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          # Even when consumers use `hardware.nvidia.open = true`, the
+          # userspace libraries (libGL, libGLX_nvidia, etc.) still come
+          # from this closed driver derivation, so it needs to build
+          # cleanly for the package to be usable at all.
+          for branch in production new_feature beta; do
+            echo "::group::Build $branch (closed)"
             nix-build --no-out-link -E "
               let
                 pkgs = import <nixpkgs> {

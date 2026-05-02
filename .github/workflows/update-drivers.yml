@@ -53,20 +53,40 @@ jobs:
             }
           '
 
-      - name: Build updated branches against linuxPackages.kernel
+      - name: Build open kernel module for each updated branch
         if: steps.update.outputs.changed == 'true'
         env:
           NIXPKGS_ALLOW_UNFREE: '1'
         run: |
-          # Build the actual driver derivation for each branch that just
-          # changed. This fetches the .run file (verifies the SRI hash we
-          # just wrote), extracts it via builder.sh, and compiles the
-          # kernel module against a real NixOS kernel — the same path
-          # consumers of this repo will hit.
           updated='${{ steps.update.outputs.updated }}'
           branches=$(echo "$updated" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin).keys()))')
           for branch in $branches; do
-            echo "::group::Build $branch"
+            echo "::group::Build $branch.open"
+            nix-build --no-out-link -E "
+              let
+                pkgs = import <nixpkgs> {
+                  config.allowUnfree = true;
+                  config.nvidia.acceptLicense = true;
+                };
+                drivers = pkgs.callPackage ./. {
+                  kernel = pkgs.linuxPackages.kernel;
+                };
+              in drivers.$branch.open
+            "
+            echo "::endgroup::"
+          done
+
+      - name: Build closed driver for each updated branch
+        if: steps.update.outputs.changed == 'true'
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          # Userspace libraries come from this derivation even when the
+          # consumer is on the open kernel module, so it needs to build.
+          updated='${{ steps.update.outputs.updated }}'
+          branches=$(echo "$updated" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin).keys()))')
+          for branch in $branches; do
+            echo "::group::Build $branch (closed)"
             nix-build --no-out-link -E "
               let
                 pkgs = import <nixpkgs> {
