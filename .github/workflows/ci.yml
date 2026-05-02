@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [trunk]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: nixos/nix:latest
+      options: --privileged
+
+    steps:
+      - name: Configure Nix
+        run: |
+          mkdir -p /etc/nix
+          {
+            echo "experimental-features = nix-command flakes"
+            echo "sandbox = false"
+            echo "substituters = https://cache.nixos.org"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+          } >> /etc/nix/nix.conf
+
+      - name: Install host tools
+        run: nix-env -iA nixpkgs.git nixpkgs.cacert
+
+      - name: Pin nixpkgs channel
+        run: |
+          nix-channel --add https://nixos.org/channels/nixos-unstable nixpkgs
+          nix-channel --update
+
+      - uses: actions/checkout@v4
+
+      - name: Eval default.nix
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          nix-instantiate --strict --eval --json -E '
+            let
+              pkgs = import <nixpkgs> {
+                config.allowUnfree = true;
+                config.nvidia.acceptLicense = true;
+              };
+              drivers = pkgs.callPackage ./. {
+                kernel = pkgs.linuxPackages.kernel;
+              };
+            in {
+              new_feature = drivers.new_feature.version;
+              beta = drivers.beta.version;
+            }
+          '
+
+      - name: Build new_feature and beta against linuxPackages.kernel
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          for branch in new_feature beta; do
+            echo "::group::Build $branch"
+            nix-build --no-out-link -E "
+              let
+                pkgs = import <nixpkgs> {
+                  config.allowUnfree = true;
+                  config.nvidia.acceptLicense = true;
+                };
+                drivers = pkgs.callPackage ./. {
+                  kernel = pkgs.linuxPackages.kernel;
+                };
+              in drivers.$branch
+            "
+            echo "::endgroup::"
+          done

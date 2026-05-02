@@ -1,0 +1,119 @@
+name: Update NVIDIA drivers
+
+on:
+  schedule:
+    # Daily at 06:00 UTC. NVIDIA usually publishes mid-week US business hours,
+    # so 06:00 UTC catches updates by the next morning regardless of time zone.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    container:
+      image: nixos/nix:latest
+      options: --privileged
+
+    steps:
+      - name: Configure Nix
+        run: |
+          mkdir -p /etc/nix
+          {
+            echo "experimental-features = nix-command flakes"
+            echo "accept-flake-config = true"
+            # Sandbox can't be enabled inside the GitHub-hosted Docker
+            # runtime; substituters from cache.nixos.org are still used.
+            echo "sandbox = false"
+            echo "substituters = https://cache.nixos.org"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+          } >> /etc/nix/nix.conf
+
+      - name: Install host tools
+        run: nix-env -iA nixpkgs.git nixpkgs.python3 nixpkgs.cacert
+
+      - name: Pin nixpkgs channel
+        run: |
+          nix-channel --add https://nixos.org/channels/nixos-unstable nixpkgs
+          nix-channel --update
+
+      - uses: actions/checkout@v4
+
+      - name: Scrape NVIDIA Unix drivers page and rewrite default.nix
+        id: update
+        run: python3 .github/scripts/update-drivers.py
+
+      - name: Evaluate updated default.nix
+        if: steps.update.outputs.changed == 'true'
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          nix-instantiate --strict --eval --json -E '
+            let
+              pkgs = import <nixpkgs> {
+                config.allowUnfree = true;
+                config.nvidia.acceptLicense = true;
+              };
+              drivers = pkgs.callPackage ./. {
+                kernel = pkgs.linuxPackages.kernel;
+              };
+            in {
+              new_feature = drivers.new_feature.version;
+              beta = drivers.beta.version;
+            }
+          '
+
+      - name: Build updated branches against linuxPackages.kernel
+        if: steps.update.outputs.changed == 'true'
+        env:
+          NIXPKGS_ALLOW_UNFREE: '1'
+        run: |
+          # Build the actual driver derivation for each branch that just
+          # changed. This fetches the .run file (verifies the SRI hash we
+          # just wrote), extracts it via builder.sh, and compiles the
+          # kernel module against a real NixOS kernel — the same path
+          # consumers of this repo will hit.
+          updated='${{ steps.update.outputs.updated }}'
+          branches=$(echo "$updated" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin).keys()))')
+          for branch in $branches; do
+            echo "::group::Build $branch"
+            nix-build --no-out-link -E "
+              let
+                pkgs = import <nixpkgs> {
+                  config.allowUnfree = true;
+                  config.nvidia.acceptLicense = true;
+                };
+                drivers = pkgs.callPackage ./. {
+                  kernel = pkgs.linuxPackages.kernel;
+                };
+              in drivers.$branch
+            "
+            echo "::endgroup::"
+          done
+
+      - name: Open pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: |
+            default.nix: bump NVIDIA driver versions
+
+            ${{ steps.update.outputs.summary }}
+          title: 'default.nix: bump NVIDIA driver versions (${{ steps.update.outputs.summary }})'
+          body: |
+            Automated update from <https://www.nvidia.com/en-us/drivers/unix/>.
+
+            Updated branches: `${{ steps.update.outputs.summary }}`
+
+            Validation that ran in this workflow:
+            - `nix-instantiate --eval` against `<nixpkgs>` with `linuxPackages.kernel`
+            - `nix-build` of each updated branch against `linuxPackages.kernel`
+              (fetches the new runfile, verifies its SRI hash, runs `builder.sh`,
+              and compiles the kernel module)
+          branch: automated/update-nvidia-drivers
+          base: trunk
+          delete-branch: true
+          add-paths: default.nix
