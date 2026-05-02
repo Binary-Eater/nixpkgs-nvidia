@@ -47,7 +47,7 @@ In ~/etc/nixos/configuration.nix~:
     boot.kernelPackages = kernelPackages;
 
     hardware.nvidia = {
-      package = nvidiaPkgs.beta; # or nvidiaPkgs.new_features if "New Feature Branch" is preferred
+      package = nvidiaPkgs.latest; # see "Available packages" below for other options
       nvidiaSettings = false; # NVIDIA Settings has to be disabled since this
                               # repository does not provide it and upstream
                               # nvidia.nix module does not safely handle when the
@@ -59,6 +59,21 @@ In ~/etc/nixos/configuration.nix~:
     # ...
   }
 #+END_SRC
+
+** Available packages
+
+The package set tracks the [[https://www.nvidia.com/en-us/drivers/unix/][NVIDIA Unix Drivers]] page. Each branch is
+exposed as a top-level attribute on the imported set:
+
+- ~production~ :: Latest Production Branch release.
+- ~new_feature~ :: Latest New Feature Branch release.
+- ~beta~ :: Latest Beta release.
+- ~latest~ :: Highest stable version between ~production~ and ~new_feature~.
+  Recommended default.
+- ~bleeding_edge~ :: Highest version between ~latest~ and ~beta~. Pick this
+  if you want the absolute newest release regardless of stability label.
+- ~mkDriver~ :: Lower-level function for building an arbitrary version. See
+  ~generic.nix~ for the accepted arguments.
 
 ** Design Choices
 
