@@ -23,14 +23,6 @@ jobs:
             echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
           } >> /etc/nix/nix.conf
 
-      - name: Install host tools
-        run: nix-env -iA nixpkgs.git nixpkgs.cacert
-
-      - name: Pin nixpkgs channel
-        run: |
-          nix-channel --add https://nixos.org/channels/nixos-unstable nixpkgs
-          nix-channel --update
-
       - uses: actions/checkout@v4
 
       - name: Eval default.nix

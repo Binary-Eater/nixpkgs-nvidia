@@ -32,13 +32,12 @@ jobs:
             echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
           } >> /etc/nix/nix.conf
 
-      - name: Install host tools
-        run: nix-env -iA nixpkgs.git nixpkgs.python3 nixpkgs.cacert
-
-      - name: Pin nixpkgs channel
-        run: |
-          nix-channel --add https://nixos.org/channels/nixos-unstable nixpkgs
-          nix-channel --update
+      - name: Install python3
+        # The image already ships with git-minimal, the nixpkgs channel,
+        # and CA certs configured. We only need python3 for the scrape
+        # script; installing nixpkgs.git here would conflict with the
+        # pre-installed git-minimal on shared profile paths.
+        run: nix-env -iA nixpkgs.python3
 
       - uses: actions/checkout@v4
 
