@@ -44,8 +44,11 @@ jobs:
                 kernel = pkgs.linuxPackages.kernel;
               };
             in {
+              production = drivers.production.version;
               new_feature = drivers.new_feature.version;
               beta = drivers.beta.version;
+              latest = drivers.latest.version;
+              bleeding_edge = drivers.bleeding_edge.version;
             }
           '
 

@@ -33,16 +33,22 @@ jobs:
                 kernel = pkgs.linuxPackages.kernel;
               };
             in {
+              production = drivers.production.version;
               new_feature = drivers.new_feature.version;
               beta = drivers.beta.version;
+              latest = drivers.latest.version;
+              bleeding_edge = drivers.bleeding_edge.version;
             }
           '
 
-      - name: Build new_feature and beta against linuxPackages.kernel
+      - name: Build production, new_feature, and beta against linuxPackages.kernel
         env:
           NIXPKGS_ALLOW_UNFREE: '1'
         run: |
-          for branch in new_feature beta; do
+          # latest and bleeding_edge are aliases of one of these three
+          # concrete branches, so building them would be redundant; the
+          # eval step above already verifies they resolve.
+          for branch in production new_feature beta; do
             echo "::group::Build $branch"
             nix-build --no-out-link -E "
               let

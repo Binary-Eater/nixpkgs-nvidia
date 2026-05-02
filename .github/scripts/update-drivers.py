@@ -31,6 +31,11 @@ DEFAULT_NIX = Path(__file__).resolve().parents[2] / "default.nix"
 # labels for each platform (Linux x86_64, aarch64, FreeBSD, Solaris) but
 # all four list the same version, so we just grab the first match.
 BRANCHES: dict[str, re.Pattern[str]] = {
+    "production": re.compile(
+        r"Latest\s+Production\s+Branch\s+Version:\s*</span>\s*"
+        r"<[Aa][^>]*>(\d+\.\d+(?:\.\d+)?)</[Aa]>",
+        re.IGNORECASE | re.DOTALL,
+    ),
     "new_feature": re.compile(
         r"Latest\s+New\s+Feature\s+Branch\s+Version:\s*</span>\s*"
         r"<[Aa][^>]*>(\d+\.\d+(?:\.\d+)?)</[Aa]>",
