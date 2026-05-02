@@ -158,9 +158,17 @@ let
       kernel.makeFlags
       ++ [
         "IGNORE_PREEMPT_RT_PRESENCE=1"
-        "NV_BUILD_SUPPORTS_HMM=1"
         "SYSSRC=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source"
         "SYSOUT=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+        # MODLIB and TARGET_ARCH must be set: NVIDIA's closed kernel/Makefile
+        # uses them inside $(eval ...) blocks, and an unset value expands to
+        # a literal $() which trips make's "empty variable name" parser
+        # error at parse time, before any rule runs.
+        "MODLIB=$(out)/lib/modules/${kernel.modDirVersion}"
+        "TARGET_ARCH=${stdenv.hostPlatform.parsed.cpu.name}"
+      ]
+      ++ optionals stdenv.cc.isClang [
+        "C_INCLUDE_PATH=${lib.getLib stdenv.cc.cc}/lib/clang/${lib.versions.major stdenv.cc.cc.version}/include"
       ]
     );
 
