@@ -32,6 +32,7 @@ jobs:
               };
               drivers = pkgs.callPackage ./. {
                 kernel = pkgs.linuxPackages.kernel;
+                kernelModuleMakeFlags = pkgs.linuxPackages.kernelModuleMakeFlags;
               };
             in {
               production = drivers.production.version;
@@ -59,6 +60,7 @@ jobs:
                 };
                 drivers = pkgs.callPackage ./. {
                   kernel = pkgs.linuxPackages.kernel;
+                  kernelModuleMakeFlags = pkgs.linuxPackages.kernelModuleMakeFlags;
                 };
               in drivers.$branch.open
             "
@@ -83,6 +85,7 @@ jobs:
                 };
                 drivers = pkgs.callPackage ./. {
                   kernel = pkgs.linuxPackages.kernel;
+                  kernelModuleMakeFlags = pkgs.linuxPackages.kernelModuleMakeFlags;
                 };
               in drivers.$branch
             "

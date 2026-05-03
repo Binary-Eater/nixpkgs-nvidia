@@ -4,6 +4,7 @@
   stdenv,
   pkgsi686Linux,
   kernel ? null,
+  kernelModuleMakeFlags ? null,
 }:
 
 let
@@ -37,20 +38,20 @@ rec {
     version = "595.71.05";
     sha256_64bit = "sha256-NiA7iWC35JyKQva6H1hjzeNKBek9KyS3mK8G3YRva4I=";
     sha256_aarch64 = "sha256-XzKloS00dFKTd4ATWkTIhm9eG/OzR/Sim6MboNZWPu8=";
-    inherit kernel;
+    inherit kernel kernelModuleMakeFlags;
   };
 
   new_feature = generic {
     version = "555.58.02";
     sha256_64bit = "sha256-xctt4TPRlOJ6r5S54h5W6PT6/3Zy2R4ASNFPu8TSHKM=";
     sha256_aarch64 = "sha256-wb20isMrRg8PeQBU96lWJzBMkjfySAUaqt4EgZnhyF8=";
-    inherit kernel;
+    inherit kernel kernelModuleMakeFlags;
   };
 
   beta = generic {
     version = "560.28.03";
     sha256_64bit = "sha256-martv18vngYBJw1IFUCAaYr+uc65KtlHAMdLMdtQJ+Y=";
     sha256_aarch64 = "sha256-+u0ZolZcZoej4nqPGmZn5qpyynLvu2QSm9Rd3wLdDmM=";
-    inherit kernel;
+    inherit kernel kernelModuleMakeFlags;
   };
 }

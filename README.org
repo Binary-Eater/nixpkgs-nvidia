@@ -38,6 +38,7 @@ In ~/etc/nixos/configuration.nix~:
       inherit lib stdenv pkgsi686Linux;
       callPackage = pkgs.callPackage;
       kernel = kernelPackages.kernel;
+      kernelModuleMakeFlags = kernelPackages.kernelModuleMakeFlags;
     };
   in
   {
