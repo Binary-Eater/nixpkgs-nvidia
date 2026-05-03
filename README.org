@@ -35,10 +35,8 @@ In ~/etc/nixos/configuration.nix~:
     kernelPackages = pkgs.linuxPackages; # Or preferred linux kernel package
 
     nvidiaPkgs = import (builtins.fetchTarball https://github.com/Binary-Eater/nixpkgs-nvidia/archive/trunk.tar.gz) {
-      lib = lib;
+      inherit lib stdenv pkgsi686Linux;
       callPackage = pkgs.callPackage;
-      stdenv = stdenv;
-      pkgsi686Linux = pkgsi686Linux;
       kernel = kernelPackages.kernel;
     };
   in
