@@ -53,7 +53,7 @@ In ~/etc/nixos/configuration.nix~:
                               # nvidia.nix module does not safely handle when the
                               # package definition is null
       open = true; # Both open and closed modules are supported
-      
+
       # Other options here... Refer to search.nixos.org
     };
     # ...
