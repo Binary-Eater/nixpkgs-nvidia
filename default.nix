@@ -35,16 +35,16 @@ rec {
   bleeding_edge = selectHighestVersion latest beta;
 
   production = generic {
-    version = "595.80";
-    sha256_64bit = "sha256-PVTIP+B/01c/8M66hXTAYTLg9T2Hy9u1gq43K7TF1Hg=";
-    sha256_aarch64 = "sha256-62uqbRsF+dizUqvXhBfmVFeV2gg4BH6f7kOta+uMMuk=";
+    version = "595.84";
+    sha256_64bit = "sha256-mcQE5SExvye8ptoCaNzOPr7cenOrF0BxqZXPGmxeugY=";
+    sha256_aarch64 = "sha256-GloNdDFfmXFVu4FAlNNk2qzqLOuw2N5CKatKkcSrQxk=";
     inherit kernel kernelModuleMakeFlags;
   };
 
   new_feature = generic {
-    version = "610.43.02";
-    sha256_64bit = "sha256-MDSgVLtM33dS/43CclZMsQVROAS/9TU4lFkBsWyndGM=";
-    sha256_aarch64 = "sha256-isWTnokUA/dzWocFBLalnk4+O5gSExVjs3dVpdYTU88=";
+    version = "610.43.03";
+    sha256_64bit = "sha256-ReLUwTSiPDXlDyU6SqY+fl6NF+PRhdSgfIpY6WEu05I=";
+    sha256_aarch64 = "sha256-jSdlXo60ilXLKWKvZfgbBnVqVYuw6zhnGuiDgwxYz94=";
     inherit kernel kernelModuleMakeFlags;
   };
 
