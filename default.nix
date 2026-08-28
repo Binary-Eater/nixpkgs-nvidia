@@ -35,9 +35,9 @@ rec {
   bleeding_edge = selectHighestVersion latest beta;
 
   production = generic {
-    version = "595.91.07";
-    sha256_64bit = "sha256-yiPIjdJLB6GRZE4eEc+3vN11NzBXSa9A+YABiwleYxM=";
-    sha256_aarch64 = "sha256-fqkN7ONFXtTeXyu2mQxorrk362Epxq3bz88hhKYQzwQ=";
+    version = "595.99.02";
+    sha256_64bit = "sha256-6HR3lYv3YwcFSTJL1a1slI66btIQ5EAFs+/4SUD24ew=";
+    sha256_aarch64 = "sha256-CCqHZTN2KNOZ4yZp2rDcuRJp9pHfRw47k4m4dWnS/2w=";
     inherit kernel kernelModuleMakeFlags;
   };
 
