@@ -26,7 +26,7 @@ jobs:
             accept-flake-config = true
             download-buffer-size = 536870912
 
-      - name: Scrape NVIDIA Unix drivers page and rewrite default.nix
+      - name: Query NVIDIA driver lookup service and rewrite default.nix
         id: update
         run: python3 .github/scripts/update-drivers.py
 

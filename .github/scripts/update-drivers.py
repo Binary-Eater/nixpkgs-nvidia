@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Scrape https://www.nvidia.com/en-us/drivers/unix/ for the latest
-"New Feature Branch" and "Beta" Linux x86_64 driver versions, prefetch
-the runfile hashes, and rewrite default.nix in-place.
+Query NVIDIA's driver lookup service (the same backend that populates
+https://www.nvidia.com/en-us/drivers/unix/) for the latest Production,
+New Feature, and Beta Linux driver versions, prefetch the runfile hashes,
+and rewrite default.nix in-place.
 
-Exits non-zero if a version cannot be parsed or a runfile cannot be fetched
+Exits non-zero if a version cannot be resolved or a runfile cannot be fetched
 so that the workflow fails loudly rather than silently skipping an update.
 """
 
@@ -15,60 +16,92 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 UNIX_DRIVERS_PAGE = "https://www.nvidia.com/en-us/drivers/unix/"
+DRIVER_LOOKUP_URL = (
+    "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/"
+    "services/AjaxDriverService.php"
+)
 DEFAULT_NIX = Path(__file__).resolve().parents[2] / "default.nix"
 
-# Each branch in default.nix corresponds to a heading on the NVIDIA Unix
-# drivers page. The page renders as:
-#
-#   <span calss="title">Latest New Feature Branch Version:</span>
-#   <a href="...">590.48.01</a>
-#
-# (the "calss" typo is NVIDIA's, not ours). The page repeats the same
-# labels for each platform (Linux x86_64, aarch64, FreeBSD, Solaris) but
-# all four list the same version, so we just grab the first match.
-BRANCHES: dict[str, re.Pattern[str]] = {
-    "production": re.compile(
-        r"Latest\s+Production\s+Branch\s+Version:\s*</span>\s*"
-        r"<[Aa][^>]*>(\d+\.\d+(?:\.\d+)?)</[Aa]>",
-        re.IGNORECASE | re.DOTALL,
-    ),
-    "new_feature": re.compile(
-        r"Latest\s+New\s+Feature\s+Branch\s+Version:\s*</span>\s*"
-        r"<[Aa][^>]*>(\d+\.\d+(?:\.\d+)?)</[Aa]>",
-        re.IGNORECASE | re.DOTALL,
-    ),
-    "beta": re.compile(
-        r"Latest\s+Beta\s+Version:\s*</span>\s*"
-        r"<[Aa][^>]*>(\d+\.\d+(?:\.\d+)?)</[Aa]>",
-        re.IGNORECASE | re.DOTALL,
-    ),
+# The Unix drivers page no longer renders versions server-side. Its inline
+# JS issues one DriverManualLookup request per (OS, branch) pair and fills
+# the "Latest ... Version:" slots from the responses. We issue the same
+# requests directly. The query parameters below are copied from the page's
+# `drvrLkupInputs` table; only `beta`, `qnf` and `sort1` differ per branch.
+COMMON_PARAMS: dict[str, str] = {
+    "func": "DriverManualLookup",
+    "psid": "133",
+    "pfid": "1075",
+    "languageCode": "1033",
+    "isWHQL": "0",
+    "dltype": "-1",
+    "dch": "0",
+    "upCRD": "null",
+    "ctk": "null",
+    "numberOfResults": "1",
+}
+
+BRANCH_PARAMS: dict[str, dict[str, str]] = {
+    "production": {"beta": "0", "qnf": "0", "sort1": ""},
+    "new_feature": {"beta": "null", "qnf": "1", "sort1": "1"},
+    "beta": {"beta": "1", "qnf": "0", "sort1": "1"},
+}
+
+# NVIDIA's osID for each runfile architecture default.nix tracks.
+ARCH_OS_IDS: dict[str, str] = {
+    "x86_64": "12",
+    "aarch64": "124",
 }
 
 
-def fetch_page() -> str:
+def lookup_driver(branch: str, arch: str) -> tuple[str, str]:
+    """Return (version, runfile URL) NVIDIA publishes for `branch` on `arch`."""
+    params = {**COMMON_PARAMS, **BRANCH_PARAMS[branch], "osID": ARCH_OS_IDS[arch]}
     req = urllib.request.Request(
-        UNIX_DRIVERS_PAGE,
+        f"{DRIVER_LOOKUP_URL}?{urllib.parse.urlencode(params)}",
         headers={"User-Agent": "Mozilla/5.0 (nixpkgs-nvidia update bot)"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        data = json.load(resp)
+
+    try:
+        if str(data["Success"]) != "1":
+            raise ValueError("lookup reported failure")
+        info = data["IDS"][0]["downloadInfo"]
+        version = info.get("DisplayVersion") or info["Version"]
+        url = urllib.parse.unquote(info["DownloadURL"])
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        sys.exit(
+            f"error: unexpected driver lookup response for {branch}/{arch} "
+            f"({e!r}) — NVIDIA likely changed the {UNIX_DRIVERS_PAGE} backend"
+        )
+
+    if not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", version):
+        sys.exit(f"error: unparseable version {version!r} for {branch}/{arch}")
+    if not url.endswith(f"-{version}.run"):
+        sys.exit(f"error: download URL {url} does not match version {version}")
+    return version, url
 
 
-def parse_versions(html: str) -> dict[str, str]:
-    versions: dict[str, str] = {}
-    for branch, pattern in BRANCHES.items():
-        m = pattern.search(html)
-        if not m:
+def resolve_branches() -> dict[str, tuple[str, str, str]]:
+    """Return {branch: (version, x86_64 URL, aarch64 URL)}."""
+    resolved: dict[str, tuple[str, str, str]] = {}
+    for branch in BRANCH_PARAMS:
+        x86_version, x86_url = lookup_driver(branch, "x86_64")
+        aarch_version, aarch_url = lookup_driver(branch, "aarch64")
+        # default.nix pins a single version per branch for both arches, so
+        # refuse to proceed if NVIDIA has published them out of step.
+        if x86_version != aarch_version:
             sys.exit(
-                f"error: could not locate version for branch '{branch}' on "
-                f"{UNIX_DRIVERS_PAGE} — NVIDIA likely changed the page layout"
+                f"error: {branch} version mismatch between x86_64 "
+                f"({x86_version}) and aarch64 ({aarch_version})"
             )
-        versions[branch] = m.group(1)
-    return versions
+        resolved[branch] = (x86_version, x86_url, aarch_url)
+    return resolved
 
 
 def prefetch_sri(url: str) -> str:
@@ -93,18 +126,6 @@ def prefetch_sri(url: str) -> str:
         text=True,
     ).strip()
     return sri
-
-
-def runfile_urls(version: str) -> tuple[str, str]:
-    x86 = (
-        f"https://download.nvidia.com/XFree86/Linux-x86_64/"
-        f"{version}/NVIDIA-Linux-x86_64-{version}.run"
-    )
-    aarch = (
-        f"https://download.nvidia.com/XFree86/Linux-aarch64/"
-        f"{version}/NVIDIA-Linux-aarch64-{version}.run"
-    )
-    return x86, aarch
 
 
 def block_pattern(branch: str) -> re.Pattern[str]:
@@ -165,9 +186,12 @@ def emit_github_output(updated: dict[str, str]) -> None:
 
 
 def main() -> None:
-    html = fetch_page()
-    target = parse_versions(html)
-    print(f"NVIDIA page reports: {target}", file=sys.stderr)
+    target = resolve_branches()
+    print(
+        "NVIDIA reports: "
+        + ", ".join(f"{b}={v}" for b, (v, _, _) in target.items()),
+        file=sys.stderr,
+    )
 
     text = DEFAULT_NIX.read_text()
     updated: dict[str, str] = {}
@@ -177,13 +201,12 @@ def main() -> None:
     # hash drift — e.g. NVIDIA re-publishing the same version under a
     # different artifact, or default.nix being hand-edited with a
     # mismatched hash. Cost: ~6 runfile downloads per run regardless.
-    for branch, target_version in target.items():
+    for branch, (target_version, x86_url, aarch_url) in target.items():
         cur_version = current_version(text, branch)
         if cur_version is None:
             sys.exit(f"error: branch '{branch}' missing from default.nix")
         cur_sha_64, cur_sha_aarch = current_shas(text, branch)
 
-        x86_url, aarch_url = runfile_urls(target_version)
         new_sha_64 = prefetch_sri(x86_url)
         new_sha_aarch = prefetch_sri(aarch_url)
 
